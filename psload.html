@@ -1,0 +1,221 @@
+<html>
+<head>
+	<title>Dreamhost</title>
+    <script type="text/javascript" src="adobe/AIRAliases.js"></script>
+    <script type="text/javascript" src="adobe/AIRIntrospector.js"></script>
+	<script type="text/javascript" src="extjs/adapter/ext/ext-base.js"></script>
+	<script type="text/javascript" src="extjs/ext-all.js"></script>
+	<script type="text/javascript" src="extjs/air/ext-air.js"></script>
+
+	<script>
+	// maintain window state automatically
+	var win = new Ext.air.NativeWindow({
+		id: 'mainWindow',
+		instance: window.nativeWindow,
+		minimizeToTray: true,
+		trayIcon: 'img/dhlogo.png',
+		trayTip: 'Dreamhost',
+		trayMenu : [{
+			text: 'Open Controller',
+			handler: function(){
+				win.activate();
+			}
+		}, '-', {
+			text: 'Exit',
+			handler: function(){
+				air.NativeApplication.nativeApplication.exit();
+			}
+		}]
+	});
+	</script>
+	
+
+<script type="text/javascript" language="javascript">
+   var http_request = false;
+   function makePOSTRequest(url, parameters, toupdate) {
+      http_request = false;
+      if (window.XMLHttpRequest) { 
+	   	 // Mozilla, Safari,...
+         http_request = new XMLHttpRequest();
+         if (http_request.overrideMimeType) {
+            http_request.overrideMimeType('text/html');
+         }
+      }
+      if (!http_request) {
+         alert('Cannot create XMLHTTP instance');
+         return false;
+      }
+      if(toupdate == "")
+	      http_request.onreadystatechange = alertContents;
+	  if(toupdate == "listofps")
+	  	  http_request.onreadystatechange = updatelistofps;	
+	  if(toupdate == "pssettings")
+	  	  http_request.onreadystatechange = showpssettings;	
+      http_request.open('POST', url, true);
+      http_request.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+      http_request.setRequestHeader("Content-length", parameters.length);
+      http_request.setRequestHeader("Connection", "close");
+      http_request.send(parameters);
+   }
+
+   function alertContents() {
+      if (http_request.readyState == 4) {
+         if (http_request.status == 200) {
+            //alert(http_request.responseText);
+			result = http_request.responseText;
+            document.getElementById('myspan').innerHTML = result;            
+         } else {
+            alert('There was a problem communicating to Dreamhost.');
+         }
+      }
+   }
+
+   function updatelistofps() {
+      if (http_request.readyState == 4) {
+         if (http_request.status == 200) {
+         	var resp = eval('('+ http_request.responseText +')');
+			//document.getElementById('listofps').innerHTML = http_request.responseText;   
+			//alert(resp.result);
+			var listps = resp.data;
+			var firstPsLoad="";
+			resetpslist();
+			appendOptionLast('');
+			for(x in listps)
+			{
+				var itemNum = parseInt(x);
+				if (isNaN(itemNum)) 
+					continue; 
+				if(listps[itemNum].ps)
+				{
+					if(firstPsLoad=="")
+						firstPsLoad=listps[itemNum].ps;
+					appendOptionLast(listps[itemNum].ps);
+				}
+			}
+			loadps(firstPsLoad);
+         } else {
+            alert('There was a problem communicating to Dreamhost.');
+         }
+      }
+   }
+   
+   function resetpslist()
+   {
+	  var elSel = document.getElementById('psselect');
+	  var i;
+      for (i = elSel.length - 1; i>=0; i--) {
+			elSel.remove(i);
+	  }
+   }
+   
+   function appendOptionLast(num)
+   {
+	  var elOptNew = document.createElement('option');
+      elOptNew.text = num;
+      elOptNew.value = num;
+      var elSel = document.getElementById('psselect');
+
+      try {
+      	elSel.add(elOptNew, null); // standards compliant; doesn't work in IE
+  	  }
+      catch(ex) {
+      	elSel.add(elOptNew); // IE only
+  	  }
+   }
+   
+   function updatesomefuturelist() {
+      if (http_request.readyState == 4) {
+         if (http_request.status == 200) {
+//           var resp = eval('('+ http_request.responseText +')');
+//			document.getElementById('listofps').innerHTML = http_request.responseText;   
+
+			// create the Grid
+			var jSource = http_request.responseText;
+			//var jSource = "'"+http_request.responseText+"'";
+
+			var myReader = new Ext.data.JsonReader({
+	        	root: 'data'	
+			    },Ext.data.Record.create([{name: 'memory-mb'},{name: 'type'},{name: 'start-date'},{name: 'ps'},{name: 'account-id'}])
+			);
+
+			var store = new Ext.data.Store({reader: myReader});
+		    store.loadData(Ext.util.JSON.decode(jSource));
+    
+
+			var grid = new Ext.grid.GridPanel({
+				store: store,
+				columns: [
+					{header: 'Memory', width: 100, sortable: true, dataIndex: 'memory-mb'},
+					{header: 'Type', width: 100, sortable: true, dataIndex: 'type'},
+					{header: 'Start', width: 250, sortable: true, dataIndex: 'start-date'},
+					{header: 'PS', width: 250, sortable: true, dataIndex: 'ps'},
+					{header: 'Account', width: 250, sortable: true, dataIndex: 'account-id'}
+				],
+				stripeRows: true,
+				height:250,
+				width:500,
+				title:'DB Grid'
+			});
+ 
+			// render grid
+			grid.render('listofps');
+	         
+         } else {
+            alert('There was a problem communicating to Dreamhost.');
+         }
+      }
+   }
+   
+   function sendtoDHAPI(toupdate,username,key,cmd,poststr) {
+      if(username=='')
+      	username="apitest@dreamhost.com";
+      if(key=='')
+      	key="6SHU5P2HLDAYECUM";
+      if(cmd=='')
+      	cmd='dreamhost_ps-list_ps';
+	  var finalstr;
+	  var uuidstring = "webdigi" + Math.floor(Math.random()*10001) + "DH";
+	  finalstr = "username=" + username + "&key=" + key + "&cmd=" + cmd + "&unique_id=" + uuidstring + "&" + poststr + "&format=json";
+      makePOSTRequest('https://api.dreamhost.com/', finalstr, toupdate);
+   }
+   
+   function loadps(psStr)
+   {
+   		var addstr = ""
+		if(psStr!="")
+		{
+			addstr = "ps="+psStr;
+			sendtoDHAPI('pssettings','','','dreamhost_ps-list_settings',addstr);
+			sendtoDHAPI('pssettings','','','dreamhost_ps-list_settings',addstr);
+			dreamhost_ps-list_usage
+		}
+   }
+   
+   function showpssettings()
+   {
+         if (http_request.readyState == 4) {
+         if (http_request.status == 200) {
+         	var resp = eval('('+ http_request.responseText +')');
+			document.getElementById('pssettings').innerHTML=http_request.responseText;
+         } else {
+            alert('There was a problem communicating to Dreamhost.');
+         }
+      }
+   }
+</script>
+</head>
+<body>
+<input value="PS Info" type="button" onclick="sendtoDHAPI('listofps','','','','')" />
+<div id="myspan">
+</div>
+<div id="listofps">
+Select PS: 
+<select id='psselect' onchange='loadps(this.options[this.selectedIndex].value);'>
+	<option></option>
+	<option>.. Loading ..</option>
+</select>
+</div>
+<div id="pssettings">
+</div>
+</body>
+</html>

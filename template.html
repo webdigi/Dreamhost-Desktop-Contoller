@@ -1,0 +1,659 @@
+<html>
+<head>
+<script>//NOT IN USE ANYMORE AS WE HAVE SOMEHOW CRACKED APP SANDBOX</script>
+<script type="text/javascript" src="extjs/adapter/ext/ext-base.js"></script>
+<script type="text/javascript" src="extjs/ext-all.js"></script>
+<link rel="stylesheet" type="text/css" href="extjs/resources/css/ext-all.css" />
+<script>
+Ext.onReady(function(){
+   // second tabs built from JS
+	var tabs2 = new Ext.TabPanel({
+		renderTo: 'bodydiv',
+		activeTab: 0,
+		width: 650,
+		height:320,
+		plain:true,
+		defaults:{autoScroll: true},
+		items:[{
+				title: 'Home',
+				html: "My Home Page."
+			},{
+				title: 'Announcement',
+				autoLoad:'announcelist.html',
+				listeners: {activate: announceactivate}
+			},{
+				title: 'Domains',
+				autoLoad:'domains.html',
+				//html: "My content was added during construction."
+				listeners: {activate: domainsactivate}
+			},{
+				title: 'DNS',
+				//autoLoad: {url: 'ajax2.htm', params: 'foo=bar&wtf=1'}
+				autoLoad:'dnslist.html',
+				listeners: {activate: dnslistactivate}
+				//html: "My content was added during construction."
+			},{
+				title: 'Users',
+				autoLoad:'userlist.html',
+				listeners: {activate: userlistactivate}			},{
+				title: 'Private Servers',
+				autoLoad:'dreamhost.html',
+				//disabled:true,
+				listeners: {activate: handleActivate},
+				html: "Can't see me cause I'm disabled"
+			},{
+				title: 'PS Settings',
+				autoLoad:'pssettings.html',
+				//disabled:true,
+				listeners: {activate: pssettingsActivate},
+				html: "Can't see me cause I'm disabled"
+			}
+		]
+	});
+});
+</script>
+
+<script type="text/javascript" language="javascript">
+	//global scripts
+   function handleActivate()
+   {
+		sendtoDHAPI('psselect','','','','');
+   }
+	  
+   function resetpslist(selectElement)
+   {
+	  var elSel = document.getElementById(selectElement);
+	  var i;
+	  for (i = elSel.length - 1; i>=0; i--) {
+			elSel.remove(i);
+	  }
+   }
+   
+   function appendOptionLast(selectElement,num)
+   {
+	  var elOptNew = document.createElement('option');
+	  elOptNew.text = num;
+	  elOptNew.value = num;
+	  var elSel = document.getElementById(selectElement);
+
+	  try {
+		elSel.add(elOptNew, null); // standards compliant; doesn't work in IE
+	  }
+	  catch(ex) {
+		elSel.add(elOptNew); // IE only
+	  }
+   }   
+   
+   function sendtoDHAPI(toupdate,username,key,cmd,poststr) {
+
+	  finalstr = makeStringDHAPI('','','dreamhost_ps-list_ps','');
+	  
+	  
+	  var connbase = new Ext.data.Connection();
+			connbase.request({
+				url: 'https://api.dreamhost.com/',
+				method: 'POST',
+				params: finalstr,
+				success: function(responseObject) {
+					var resp = eval('('+ responseObject.responseText +')');
+					var listps = resp.data;
+					var firstPsLoad="";
+					resetpslist(toupdate);
+					//appendOptionLast('');
+					for(x in listps)
+					{
+						var itemNum = parseInt(x);
+						if (isNaN(itemNum)) 
+							continue; 
+						if(listps[itemNum].ps)
+						{
+							if(firstPsLoad=="")
+								firstPsLoad=listps[itemNum].ps;
+							appendOptionLast(toupdate,listps[itemNum].ps);
+						}
+					}
+					if(toupdate=="psselect")
+						loadps(firstPsLoad);
+					if(toupdate=="psselectsettings")
+						loadpssettings(firstPsLoad);
+				},
+				failure: function() {
+					Ext.Msg.alert('Status', 'Unable to connect to Dreamhost.');
+				 }
+			});
+   }
+   
+   function makeStringDHAPI(username,key,cmd,poststr)
+   {
+	  if(username=='')
+		username="apitest@dreamhost.com";
+	  if(key=='')
+		key="6SHU5P2HLDAYECUM";
+	  if(cmd=='')
+		cmd='dreamhost_ps-list_ps';
+	  var finalstr;
+	  var uuidstring = "webdigi" + Math.floor(Math.random()*10001) + "DH";
+	  finalstr = "username=" + username + "&key=" + key + "&cmd=" + cmd + "&unique_id=" + uuidstring + "&format=json" + "&" + poststr ;
+	  return finalstr;
+   }
+   
+   function loadps(psStr)
+   {
+		var addstr = ""
+		if(psStr!="")
+		{
+			addstr = "ps="+psStr;
+									
+			postStr2 = makeStringDHAPI('','','dreamhost_ps-list_usage',addstr);
+			var conn2 = new Ext.data.Connection();
+			conn2.request({
+				url: 'https://api.dreamhost.com/',
+				method: 'POST',
+				params: postStr2,
+				success: function(responseObject) {
+					var resp = eval('('+ responseObject.responseText +')');
+					//document.getElementById('psusagehistory').innerHTML=responseObject.responseText;
+					
+					var graphList = resp.data;
+					var procList="", memList="";
+					for(x in graphList)
+					{
+						var itemNum = parseInt(x);
+						if (isNaN(itemNum)) 
+							continue; 
+						if(graphList[itemNum].memory_mb)
+						{
+							if(memList!="")
+								memList = memList + "," + graphList[itemNum].memory_mb ;
+							else
+								memList = graphList[itemNum].memory_mb ;
+						}
+						if(graphList[itemNum].load)
+						{
+							if(procList!="")
+								procList = procList + "," + Math.round((graphList[itemNum].load * 100));
+							else
+								procList = Math.round((graphList[itemNum].load * 100));
+						}
+					}
+					var urlchart = "&nbsp;&nbsp;<img src='http://chart.apis.google.com/chart?cht=lc&chd=t:" + memList + "&chtt=Memory&chs=300x200&chco=336699,990000'></img>";
+					urlchart = urlchart + "&nbsp;&nbsp;&nbsp;&nbsp;<img src='http://chart.apis.google.com/chart?cht=lc&chd=t:" + procList + "&chtt=Load&chs=300x200&chco=336699,990000'></img>";
+					document.getElementById('graphpro1').innerHTML=urlchart;					
+				},
+				failure: function() {
+				 Ext.Msg.alert('Status', 'Unable to connect to Dreamhost.');
+				 }
+			});
+		}
+   }
+   
+   function loadpssettings(psStr){
+		var addstr = ""
+		if (psStr != "") {
+			addstr = "ps=" + psStr;
+			
+			postStr1 = makeStringDHAPI('', '', 'dreamhost_ps-list_settings', addstr);
+			var conn1 = new Ext.data.Connection();
+			conn1.request({
+				url: 'https://api.dreamhost.com/',
+				method: 'POST',
+				params: postStr1,
+				success: function(responseObject){
+					var resp = eval('(' + responseObject.responseText + ')');
+					var pssetdata = resp.data;
+					var setarr = [];
+					for(x in pssetdata)
+					{
+						var itemNum = parseInt(x);
+						if (isNaN(itemNum)) 
+							continue; 
+						setarr[pssetdata[itemNum].setting]=pssetdata[itemNum].value;	
+					}
+					//alert('pssettings');
+					document.getElementById('pssettings').innerHTML="";
+					var myForm = new Ext.form.FormPanel({
+						renderTo: "pssettings",
+						//title: "PS Settings",
+						width: 425,
+						frame: true,
+						items: [{
+							xtype: "textfield",
+							fieldLabel: "Comment",
+							name: "commentbox",
+							value: setarr["comment"]
+						}, {
+							xtype: "checkbox",
+							fieldLabel: "Apache2",
+							name: "checkbox",
+							inputValue: "cbvalue",
+							checked: setarr["apache2_enabled"]
+						}, {
+							xtype: "checkbox",
+							fieldLabel: "Courier",
+							name: "checkbox",
+							inputValue: "cbvalue",
+							checked: setarr["courier_enabled"]
+						}, {
+							xtype: "checkbox",
+							fieldLabel: "Jabber",
+							name: "checkbox",
+							inputValue: "cbvalue",
+							checked: setarr["jabber_transports_enabled"]
+						}, {
+							xtype: "checkbox",
+							fieldLabel: "Lighttpd",
+							name: "checkbox",
+							inputValue: "cbvalue",
+							checked: setarr["lighttpd_enabled"]
+						}, {
+							xtype: "checkbox",
+							fieldLabel: "modphp_4",
+							name: "checkbox",
+							inputValue: "cbvalue",
+							checked: setarr["modphp_4_selected"]
+						}, {
+							xtype: "checkbox",
+							fieldLabel: "PHP X-cache",
+							name: "checkbox",
+							inputValue: "cbvalue",
+							checked: setarr["modphp_4_selected"]
+						}, {
+							xtype: "checkbox",
+							fieldLabel: "ProFtpd",
+							name: "checkbox",
+							inputValue: "cbvalue",
+							checked: setarr["proftpd_enabled"]
+						}],
+						buttons: [{
+							text: "Cancel"
+						}, {
+							text: "Save"
+						}]
+					});
+				},
+				failure: function(){
+					Ext.Msg.alert('Status', 'Unable to connect to Dreamhost.');
+				}
+			});
+		}
+   }
+   function domainsactivate()
+   {
+	  finalstr = makeStringDHAPI('','','domain-list_domains','');
+	  
+	  
+	  var connbase = new Ext.data.Connection();
+			connbase.request({
+				url: 'https://api.dreamhost.com/',
+				method: 'POST',
+				params: finalstr,
+				success: function(responseObject) {
+					var resp = eval('('+ responseObject.responseText +')');
+					var listps = resp.data;
+					var firstPsLoad="";
+
+					var domdata = resp.data;
+					var setarr = [];
+					for(x in domdata)
+					{
+						var itemNum = parseInt(x);
+						if (isNaN(itemNum)) 
+							continue; 
+						var detailarray = new Array(domdata[itemNum].domain,domdata[itemNum].hosting_type,domdata[itemNum].user,domdata[itemNum].unique_ip,domdata[itemNum].home); 
+						setarr[x]=detailarray;	
+					}
+
+					document.getElementById('domainsdivholder').innerHTML="";
+					var sampleData = setarr;
+	
+					// 2. Create the Store
+					var store = new Ext.data.SimpleStore({ 
+					fields : [
+   { name: 'Domain', type: 'string' },
+   { name: 'Hosting', type: 'string' },
+   { name: 'User', type: 'string' },
+   { name: 'IP', type: 'string' },
+   { name: 'Home', type: 'string' }
+  ],
+  data: sampleData
+ });
+
+ // 3. Initialize the grid control
+ var simpleGrid = new Ext.grid.EditorGridPanel({
+  store: store,
+		columns: [{
+		  header: 'Domain', 
+			 width: 160, 
+			 sortable: true, 
+			 dataIndex: 'Domain'
+			},
+			{
+			 header: 'Hosting', 
+			 width: 75, 
+			 sortable: true, 
+			 dataIndex: 'Hosting'
+			},
+			{
+			 header: 'User',
+			 width: 75, 
+			 sortable: true, 
+			 dataIndex: 'User'
+			},
+			{
+			 header: 'IP',
+			 width: 95, 
+			 sortable: true, 
+			 dataIndex: 'IP' 
+			},
+			{
+			 header: 'Home',
+			 width: 165, 
+			 sortable: true, 
+			 dataIndex: 'Home' 
+			}
+		],
+		//clicksToEdit: 1,
+		stripeRows: true,
+		autoHeight:true,
+		//width:500,
+		enableHdMenu: false, // 7. Disable the context menu
+		//title:'Domain List',
+		renderTo: 'domainsdivholder'
+ });
+
+					
+				},
+				failure: function() {
+					Ext.Msg.alert('Status', 'Unable to connect to Dreamhost.');
+				 }
+			});
+   }
+   
+   function dnslistactivate()
+   {
+	  finalstr = makeStringDHAPI('','','dns-list_records','');
+	  
+	  
+	  var connbase = new Ext.data.Connection();
+			connbase.request({		
+				url: 'https://api.dreamhost.com/',
+				method: 'POST',
+				params: finalstr,
+				success: function(responseObject) {
+					var resp = eval('('+ responseObject.responseText +')');
+
+					var dnsdata = resp.data;
+					var setarr = [];
+					for(x in dnsdata)
+					{
+						var itemNum = parseInt(x);
+						if (isNaN(itemNum)) 
+							continue; 
+						var detailarray = new Array(dnsdata[itemNum].type,dnsdata[itemNum].record,dnsdata[itemNum].zone,dnsdata[itemNum].value,dnsdata[itemNum].comment); 
+						setarr[x]=detailarray;	
+					}
+
+					document.getElementById('dnslistdivholder').innerHTML="";
+					var sampleData = setarr;
+	
+					// 2. Create the Store
+					var store = new Ext.data.SimpleStore({ 
+					fields : [
+   { name: 'type', type: 'string' },
+   { name: 'record', type: 'string' },
+   { name: 'zone', type: 'string' },
+   { name: 'value', type: 'string' },
+   { name: 'comment', type: 'string' }
+  ],
+  data: sampleData
+ });
+
+ // 3. Initialize the grid control
+ var simpleGrid = new Ext.grid.EditorGridPanel({
+  store: store,
+		columns: [{
+		  header: 'Type', 
+			 width: 50, 
+			 sortable: true, 
+			 dataIndex: 'type'
+			},
+			{
+			 header: 'Record', 
+			 width: 120, 
+			 sortable: true, 
+			 dataIndex: 'record'
+			},
+			{
+			 header: 'Value',
+			 width: 155, 
+			 sortable: true, 
+			 dataIndex: 'value' 
+			},
+			{
+			 header: 'Comment',
+			 width: 165, 
+			 sortable: true, 
+			 dataIndex: 'comment' 
+			}
+		],
+		//clicksToEdit: 1,
+		stripeRows: true,
+		autoHeight:true,
+		//width:500,
+		enableHdMenu: false, // 7. Disable the context menu
+		//title:'Domain List',
+		renderTo: 'dnslistdivholder'
+ });
+
+					
+				},
+				failure: function() {
+					Ext.Msg.alert('Status', 'Unable to connect to Dreamhost.');
+				 }
+			});   	
+   }
+
+	function userlistactivate(){
+		
+	  finalstr = makeStringDHAPI('','','user-list_users_no_pw','');
+	  
+	  
+	  var connbase = new Ext.data.Connection();
+			connbase.request({		
+				url: 'https://api.dreamhost.com/',
+				method: 'POST',
+				params: finalstr,
+				success: function(responseObject) {
+					var resp = eval('('+ responseObject.responseText +')');
+
+					var userdata = resp.data;
+					var setarr = [];
+					for(x in userdata)
+					{
+						var itemNum = parseInt(x);
+						if (isNaN(itemNum)) 
+							continue; 
+						var detailarray = new Array(userdata[itemNum].type,userdata[itemNum].username,userdata[itemNum].shell,userdata[itemNum].home,userdata[itemNum].disk_used_mb,userdata[itemNum].gecos); 
+						setarr[x]=detailarray;	
+					}
+
+					document.getElementById('userlistdivholder').innerHTML="";
+					var sampleData = setarr;
+	
+					// 2. Create the Store
+					var store = new Ext.data.SimpleStore({ 
+					fields : [
+   { name: 'type', type: 'string' },
+   { name: 'username', type: 'string' },
+   { name: 'shell', type: 'string' },
+   { name: 'home', type: 'string' },
+   { name: 'disk_used_mb', type: 'float'},
+   { name: 'gecos', type: 'string' } 
+  ],
+  data: sampleData
+ });
+
+ // 3. Initialize the grid control
+ var simpleGrid = new Ext.grid.EditorGridPanel({
+		store: store,
+		columns: [{
+		  header: 'Type', 
+			 width: 50, 
+			 sortable: true, 
+			 dataIndex: 'type'
+			},
+			{
+			 header: 'Username', 
+			 width: 80, 
+			 sortable: true, 
+			 dataIndex: 'username'
+			},
+			{
+			 header: 'Shell',
+			 width: 155, 
+			 sortable: true, 
+			 dataIndex: 'shell' 
+			},
+			{
+			 header: 'Home',
+			 width: 165, 
+			 sortable: true, 
+			 dataIndex: 'home' 
+			},
+			{
+			 header: 'Disk',
+			 width: 80, 
+			 sortable: true, 
+			 dataIndex: 'disk_used_mb' 
+			},
+			{
+			 header: 'Comment',
+			 width: 165, 
+			 sortable: true, 
+			 dataIndex: 'gecos' 
+			}
+		],
+		//clicksToEdit: 1,
+		stripeRows: true,
+		autoHeight:true,
+		//width:500,
+		enableHdMenu: false, // 7. Disable the context menu
+		//title:'Domain List',
+		renderTo: 'userlistdivholder'
+ });
+
+					
+				},
+				failure: function() {
+					Ext.Msg.alert('Status', 'Unable to connect to Dreamhost.');
+				 }
+			});   		
+		
+	}
+	
+	function announceactivate(){
+		
+	  finalstr = makeStringDHAPI('','','announcement_list-list_lists','');
+	  
+	  
+	  var connbase = new Ext.data.Connection();
+			connbase.request({		
+				url: 'https://api.dreamhost.com/',
+				method: 'POST',
+				params: finalstr,
+				success: function(responseObject) {
+					var resp = eval('('+ responseObject.responseText +')');
+
+					var userdata = resp.data;
+					var setarr = [];
+					for(x in userdata)
+					{
+						var itemNum = parseInt(x);
+						if (isNaN(itemNum)) 
+							continue;
+						var datechange =  userdata[itemNum].start_date.split("-");
+						var sdatechange = datechange[2] + '-' + datechange[1] + '-' + datechange[0];
+						var detailarray = new Array(userdata[itemNum].listname,userdata[itemNum].domain,userdata[itemNum].name,sdatechange,userdata[itemNum].num_subscribers); 
+						setarr[x]=detailarray;	
+					}
+
+					document.getElementById('announcedivholder').innerHTML="";
+					var sampleData = setarr;
+	
+					// 2. Create the Store
+					var store = new Ext.data.SimpleStore({ 
+					fields : [
+   { name: 'listname', type: 'string' },
+   { name: 'domain', type: 'string' },
+   { name: 'name', type: 'string' },
+   { name: 'start_date', type: 'string' },
+   { name: 'num_subscribers', type: 'int'}
+  ],
+  data: sampleData
+ });
+
+ // 3. Initialize the grid control
+ var simpleGrid = new Ext.grid.EditorGridPanel({
+		store: store,
+		columns: [{
+		  header: 'List', 
+			 width: 100, 
+			 sortable: true, 
+			 dataIndex: 'listname'
+			},
+			{
+			 header: 'Domain', 
+			 width: 80, 
+			 sortable: true, 
+			 dataIndex: 'domain'
+			},
+			{
+			 header: 'Name',
+			 width: 105, 
+			 sortable: true, 
+			 dataIndex: 'name' 
+			},
+			{
+			 header: 'Start Date',
+			 width: 105, 
+			 sortable: true, 
+			 dataIndex: 'start_date' 
+			},
+			{
+			 header: 'Subscribers',
+			 width: 80, 
+			 sortable: true, 
+			 dataIndex: 'num_subscribers' 
+			}
+		],
+		//clicksToEdit: 1,
+		stripeRows: true,
+		autoHeight:true,
+		//width:500,
+		enableHdMenu: false, // 7. Disable the context menu
+		//title:'Domain List',
+		renderTo: 'announcedivholder'
+ });
+
+					
+				},
+				failure: function() {
+					Ext.Msg.alert('Status', 'Unable to connect to Dreamhost.');
+				 }
+			});   				
+	}
+	
+</script>
+
+<script>
+	//pssettings.html
+	function pssettingsActivate()
+	{
+		sendtoDHAPI('psselectsettings','','','','');
+	}
+</script>
+</head>
+<body>
+<div id='bodydiv'></div>
+</body>
+</html>
