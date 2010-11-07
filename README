@@ -1,0 +1,13 @@
+Dreamhost Controller using API
+Dreamhost controller is a free application built using Adobe AIR and Dreamhost APIs. This application brings almost all functionality provided by the Dreamhost APIs to the desktop. The app can run on multiple operating-systems (Mac, Windows and Linux desktops). The first version was out on May 26th 2009. By default the test account of dreamhost is set to be used to invoke APIs. This will show you the features and capabilities of the system
+
+Requirements:
+Any OS (As this is written using Adobe AIR)
+Adobe AIR
+Dreamhost API
+
+Source:
+This is opensource and you are free to use it however you want. It comes with absolutely no warranty.
+
+Link: http://www.webdigi.co.uk/blog/apps/dreamhost-controller-using-api/
+
